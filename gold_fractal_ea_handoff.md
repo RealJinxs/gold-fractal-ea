@@ -66,11 +66,68 @@ InpSalvageExitPct=0.15, InpBreakEvenTriggerPct=0.10, InpBreakEvenLockPct=0.025
 
 ## 次のステップ(未実施)
 
-1. MT5起動 → F4(MetaEditor) → Expertsツリーでファイルを開き F7 でコンパイル
-   (作者報告: 0 errors / 0 warnings)
-2. Navigator → Expert Advisors からチャートにアタッチ(想定シンボル: XAUUSD)
-3. Strategy Tester でバックテスト(H1データ必須)
-4. デモ口座でフォワード検証
+1. ~~MT5起動 → F4(MetaEditor) → Expertsツリーでファイルを開き F7 でコンパイル~~
+   ✅ 2026-10-22 Windows版で実施済み(MetaEditor64.exe /compile CLI、0 errors/0 warnings)
+2. ✅ XAUUSD,H1 チャートにアタッチ済み(MCP chart_add_expert、デフォルトパラメータ)
+3. ~~Strategy Tester でバックテスト(H1データ必須)~~
+   ✅ 2026-10-22 実施済み(下記「バックテスト結果」参照)
+4. デモ口座でフォワード検証 ← 進行中(下記「残課題」)
+
+## Windows環境での作業メモ(2026-10-22)
+
+- MT5本体: `C:\Program Files\MetaTrader 5` (build 6276)、
+  データフォルダ: `C:\Users\Dee\AppData\Roaming\MetaQuotes\Terminal\D0E8209F77C8CF37AD8BF550E51FF075`
+- **コンパイルはCLIで可能**: `"C:\Program Files\MetaTrader 5\MetaEditor64.exe" /compile:"<mq5の絶対パス>" /log:"<ログ出力パス>"`。
+  ログはUTF-16。GUI不要。
+- **MT5内蔵MCPサーバー**: `http://127.0.0.1:22346/mcp` (terminal) / `:22345` (metaeditor)。
+  認証は `Authorization: Bearer <APIキー>`。APIキーは MT5 GUI の
+  Tools → Options → MCP タブで確認可能(config/assistant.ini 内の値は暗号化済みで使えない)。
+  67ツールあり: tester_run_backtest / chart_add_expert / get_trading_account_info 等。
+- **口座**: 旧 `988033867` (Bitget-MT5-LIVE2表示、実体は期限切れデモ)は接続不可。
+  新規 MetaQuotes-Demo デモ `5057696280` (名義 Dehi Lee、残高$100,000、hedging)に切替済み、接続OK。
+- **バックテストは terminal64.exe /config でも MCP (tester_prepare_config→tester_run_backtest) でも可能**。
+  MCPの方が進捗・レポート取得まで完結するので推奨。
+
+## バックテスト結果(2026-10-22、初回デフォルトパラメータ)
+
+- 条件: XAUUSD, H1, Every tick(生成ティック), 2025-10-21〜2026-10-21(約1年),
+  初回証拠金 $10,000, レバレッジ 1:100, MetaQuotes-Demo
+- 結果: **純利益 +$799.36 (+8.0%)** / PF 1.29 / 667トレード(勝率 88.6%=591勝76敗)
+  / 最大DD $607(6.0%) / Sharpe 2.23 / Expected payoff $1.20
+- 所見: 高勝率・小利確(TP1%/SL2%)型。連勝最大33回、連敗最大3回。
+  ロング305/ショート362。トレード実行系は全て正常(逆指値発注・約定・BE移動・
+  残り逆指値キャンセル全て確認済み、エラーなし)。
+- レポート保存: `MQL5\Files\gold_fractal_xauusd_backtest.xlsx`
+
+## フォワードテスト稼働中(2026-10-22 01:31〜)
+
+- デモ口座 `5057696280` (MetaQuotes-Demo、$100,000) で EA 稼働中
+- 初回注文: **SELL_STOP 0.01 XAUUSD @ 4110.12** (SL 4192.32 / TP 4069.02)、order #58994350475
+- EAは15分毎に構造スキャン(InpRescanMinutes)
+
+## トラブルシュート済み: 「AutoTrading disabled by client」(retcode 10027)
+
+原因は**EA個別の「Allow Algo Trading」フラグ**(MCP chart_add_expert でアタッチすると OFF になる)。
+解決手順:
+
+1. ターミナル終了
+2. `MQL5\Profiles\Charts\Default\chart04.chr` の `<expert>` ブロック内
+   `expertmode=0` → `expertmode=1` に書き換え
+3. `terminal64.exe /config:mt5_autotrade.ini` で起動
+   (ini内容: `[Experts] Enabled=1 AllowLiveTrading=1`)
+4. EA再初期化後のスキャンで正常発注(retcode=10009)
+
+※ common.ini の [Experts] キーは通常起動では読まれない(Optionsの設定は暗号化された
+  settings.ini に保存)。/config 起動時のみ有効。グローバル側の Algo Trading は
+  最初から ON だった模様(experts_trade_allowed=true)。
+
+## 残課題・注意点
+
+- MCP の trade_* 系ツールは "trading is not permitted" で拒否中
+  (mcp_trade_allowed=true でも別途 Assistant 権限がある模様。EA運用には影響なし)
+- 最適化は未実施。tester_run_optimization で可能
+- テスターの「every tick」は生成ティック。より厳密には real ticks モデル推奨
+- 手動で MT5 を閉じた場合、EAは停止する。継続稼働させるにはターミナル起動状態を維持
 
 ## 話した内容の経緯
 
